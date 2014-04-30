@@ -5,23 +5,8 @@
 #                                                                              #
 #                                                                              #
 #   @Author: Ammon Shepherd                                                    #
-#   @Date:   07.30.12                                                          #
-    VERSION="1.7.1"                                                            #  
-#------------------------------------------------------------------------------#
-# Done:
-# Fix the variable counter to work with BASH v4
-# Fix the get_config_value function to improve ability to get value regardless of spaces etc.
-# Improve the regexp to get the table prefix from the wp-config.php file
-
-#ToDo: 
-# - integrate wpversions into this script, perhaps.
-# - Implement the steps to strengthen/protect WP installs
-
-
-#------------------------------------------------------------------------------#
-#                           Change log                                         #
-#                                                                              #
-# See ChageLog at https://github.com/mossiso/SVN-Multiple-WordPress-Updater/   #
+#   @Date:   04.30.14                                                          #
+    VERSION="2.0"  
 #------------------------------------------------------------------------------#
 
 # End the script if any statement returns a non-true return value
@@ -47,23 +32,27 @@ SVNREPORT="svnreport-$CURDATE"
 OLDBASE="http://svn.automattic.com/wordpress"
 SVNBASE="http://core.svn.wordpress.org"
 WPLATEST="http://wordpress.org/latest.zip"
-TMPWPDIR="/tmp/latest-wp"
 TMPFILE=`mktemp` || exit 1
 TMPDIR="/tmp/wpupdate"
-CONTENTBK=".wp-content-backup.zip"
+TMPWPDIR="/tmp/wupupdate/latest-wp"
 
 LATESTWP=`curl -s http://wordpress.org/download/ | grep "latest stable release of WordPress" | cut -d"(" -f2 | cut -d")" -f1 | cut -d" " -f2`
 
 
 USAGE='
-Usage: wpupdate [OPTIONS]... [VERSION NUMBER]
-Switch or update the WordPress install(s) to the VERSION NUMBER.
+Usage: wpupdate [OPTIONS]
+Upgrade a WordPress install (or a list of installs) to the latest version of WordPress ('$LATESTWP').
 
 Example: wpupdate -f /home/wp-versions 
 This would update all of the installs listed in wp-versions to the latest version of WordPress.
 
-"wpupdate -h" for help
+Example: wpupdate
+Updates the WordPress installation in the current directory (if it is one) to the latest version of WordPress.
+
+Example: wpupdate -h 
+Prints out this help message.
 '
+
 
 HELPTEXT='wpupdate '$VERSION' by Ammon Shepherd
 
@@ -74,15 +63,19 @@ OPTIONS:
         [svn update] or -w [svn switch].
 
  -c     Do not use the wp-config.php file to grab the database user name and
-        password. Default is to use the wp-config.php file.
+        password. Default is to use the wp-config.php file. Scipt always uses
+        wp-config.php to get the database name unless the -d flag is used.
 
  -d     supply the database name to use. Use only when updating a single
         install
 
- -f     path to a file containing a list of paths to WordPress installs, can
+ -f [/path/to/filename]
+        path to a file containing a list of paths to WordPress installs, can
         not be used with -i (single install) option. File must consist of full
         paths in the form "/wwwroot/sites/mossiso.com/blog/" each on a separate
-        line. A ";" semi-colon designates a commented line.  
+        line. A ";" semi-colon designates a commented line. If file exists in
+        the directory you are running wpupdate from, then only the filename is
+        needed.
 
  -h     display this help info
 
@@ -93,9 +86,10 @@ OPTIONS:
 
  -n     run as a normal user, do not use sudo
 
- -o     path to output file containing report of svn update. File will be
+ -o [/path/to/filename]     
+        path to output file containing report of svn update. File will be
         created if it does not exist. The directories must already exist. The
-        default is to save it to your home directory (ex. '$HOME')
+        default is to save it to your home directory. (ex. '$HOME')
 
  -p     turn off the steps to secure and protect WP. Steps include removing
         the install.php file, adding rules to the htaccess file to protect
@@ -104,10 +98,14 @@ OPTIONS:
 
  -v     outputs version information and exits
 
+ -V [#.#]
+        The WordPress version number used for the upgrade/downgrade.
+
  -r     output the default SVN repo used and exit
 
- -s     svn URL to use for updates (defaults to '$SVNBASE'). Used with -u [svn
-        update] or -w [svn switch].
+ -s [http://svn.url.com]
+        svn URL to use for updates (defaults to '$SVNBASE').
+        Used with -u [svn update] or -w [svn switch].
 
  -u     use "svn update", can not be used with -w (switch) option. Required for
         SVN update, default is to use WordPress latest.zip and cp command.
@@ -124,15 +122,16 @@ OPTIONS:
 WHAT IT DOES:
     First the wpupudate program makes a backup copy of the MySQL database and
     the wp-contents/ directory. It places these backups in a temporary
-    directory ('$TMPWP').
+    directory ('$TMPDIR').
     
 
 THINGS TO KNOW:
     By default the program runs as sudo. To run as normal user, pass the -n
     flag. This user must have absolute privileges over all files in the
-    WordPress folders.
+    WordPress installation directory.
 
-    The location is updated to the latest version of WordPress by default.
+    The location is updated to the latest version of WordPress by default, use
+    the -V flag to change the WordPress version.
 
     If the -f or -i flags are not given on the command line, the program will
     attempt to update the current directory.
@@ -141,8 +140,74 @@ THINGS TO KNOW:
     account and connection information. If it can not find the information, the
     script prompts for a MySQL user and password.
 
+    
 '
 
+
+###################       FUNCTIONS     ########################################
+# Get the MySQL user and password
+function ask_db_account() {
+    # Get the MySQL user/pass but don't show it on the CLI
+    echo -n "Enter a MySQL user with access to the database: "
+    read -s sqluser
+    echo
+    echo -n "Enter the MySQL pass: "
+    read -s sqlpass
+    echo
+}
+
+# Purpose: Get a value from the wp-config.php file.
+#
+# Parameters:
+# $1 = the variable to look for in wp-config.php
+# $2 = the path to the wp-config.php file itself
+#
+# Usage: Call the function and set the result to a variable. Give the function
+# the VARIABLE in the wp-config.php file to get. Relies on wp-config.php using
+# single quotes. 
+# Example: DBUSER=$(get_config_value DBUSER $path)
+#
+function get_config_value() {
+    if [[ -f ${2}/wp-config.php ]]; then
+        # help on BASH function return values from here:
+        # http://www.linuxjournal.com/content/return-values-bash-functions
+        value=''
+        if [[ -n "$1" && -n "$2" ]]; then
+            value=$(grep "^define('${1}" ${2}/wp-config.php | sed -r -e "s/.*'${1}'.*'([^']+)'.*/\1/")
+            echo $value
+        fi
+    fi
+}
+
+
+# Get the latest version of WordPress as a zip file from http://wordpress.org
+# Create temporary location for latest WP version for use in upgrading installs
+function create_tmps() {
+}
+
+function clean_up_tmp() {
+        # remove the tempfile when updating the current directory
+        if [ -f $TMPFILE ]; then
+            if [[ 'true' == $NOSUDO ]]; then
+                rm -rf $TMPFILE
+            else
+                sudo rm -rf $TMPFILE
+            fi
+        fi
+}
+
+#####################    END FUNCTIONS        ##################################
+
+
+
+
+################################################################################
+#                                                                              #
+#                       Options, Flags, Parameters.                            #
+#                                                                              #
+#                                                                              #
+#                                                                              #
+################################################################################
 
 # Set variables of unused options
 BRANCH=''
@@ -158,59 +223,14 @@ TAGS=''
 SVNOPT=''
 SKIPFIX=''
 SKIPSECURE=''
-
-
-###################       FUNCTIONS     ########################################
-# Get the MySQL user and password
-function ask_db_account() {
-    # Get the MySQL user/pass but don't show it on the CLI
-    echo -n "Enter a MySQL user with access to the database: "
-    read -s sqluser
-    echo
-    echo -n "Enter the MySQL pass: "
-    read -s sqlpass
-    echo
-}
-
-# Get a valued from the wp-config.php file.
-# Usage: Call the function and set the result to a variable. Give the function
-# the Variable in the wp-config.php file to get, ex: 
-# DBUSER=$(get_config_value DBUSER) # or DBUSER=`get_config_value DBUSER`
-function get_config_value() {
-    # help on BASH function return values from here:
-    # http://www.linuxjournal.com/content/return-values-bash-functions
-    value=''
-    if [[ -n "$1" && -n "$2" ]]; then
-        value=`grep "^define('${1}" ${2}/wp-config.php | sed -r -e "s/.*'${1}'.*'([^']+)'.*/\1/"`
-        echo $value
-    fi
-}
-
-
-# Get the latest version of WordPress as a zip file from http://wordpress.org
-# Create temporary location for latest WP version for use in upgrading installs
-function create_tmps() {
-}
-
-function clean_up_tmp() {
-        # remove the tempfile when updating the current directory
-        if [ -f $TMPFILE ]; then
-            if [[ 'true' == $NOSUDO ]]; then
-                rm -rf $TMPWPDIR
-            else
-                sudo rm -rf $TMPWPDIR
-            fi
-        fi
-}
-
-#####################    END FUNCTIONS        ##################################
+WPVERSION=''
 
 
 # Get the options
-while getopts "bcd:f:hi:kno:prs:tuvwx" options; do
+while getopts "bcd:f:hi:kno:prs:tuvV:wx" options; do
     case $options in
         b ) BRANCH="branches";;
-        c ) CONFIG='false';;
+        c ) CONFIG='true';;
         d ) DBNAME="$OPTARG";;
         f ) FILENAME="$OPTARG";;
         h ) echo "$HELPTEXT"
@@ -227,6 +247,7 @@ while getopts "bcd:f:hi:kno:prs:tuvwx" options; do
         u ) SVNOPT="update";;
         v ) echo "wpupdate $VERSION"
             exit 0;;
+        V ) WPVERSION="$OPTARG";;
         w ) SVNOPT="switch";;
         x ) SKIPFIX='true';;
         \? ) echo "$USAGE"
@@ -235,17 +256,28 @@ while getopts "bcd:f:hi:kno:prs:tuvwx" options; do
             exit 1;;
     esac
 done
-shift `expr $OPTIND - 1`
+shift $(($OPTIND - 1))
 
-# If no options are specified, spit out the help text, have to have a version
-if [ $# -eq 0 ]; then
-    echo "$USAGE"
-    exit
+
+
+
+################################################################################
+#                                                                              #
+#               Temporary locations and Latest WordPress                       #
+#                                                                              #
+#                                                                              #
+#                                                                              #
+################################################################################
+
+# If it doesn't exist, make a temp directory to stash stuff later
+if [[ ! -d $TMPDIR ]]; then
+    mkdir -p $TMPDIR
 fi
+
 
 # create a temp folder for the latest wp
 if [[ ! -d $TMPWPDIR ]]; then
-    mkdir $TMPWPDIR
+    mkdir -p $TMPWPDIR
 fi
 
 cd $TMPWPDIR
@@ -255,10 +287,6 @@ wget -nv -O latest.zip http://wordpress.org/latest.zip
 # Unpackage it
 unzip -q latest.zip
 
-# If it doesn't exist, make a temp directory to stash stuff later
-if [[ ! -d $TMPDIR ]]; then
-    mkdir $TMPDIR
-fi
 
 
 
@@ -271,46 +299,54 @@ fi
 ################################################################################
 
 # Get the array containing the full paths to the Wordpress installs to
-# update from a file.  tip from
-# http://www.linuxquestions.org/questions/showthread.php?p=2867155#post2867155
+# update from a file, using Bash v4 default readarray
 
-exec 6<&0
-
+declare -a filelist
+# If the -f flag (file containing paths) is used and the -i flag (single path
+# given on cmdline) is NOT used...
 if [[ -n $FILENAME && -z $SINGLE ]]; then
+    # if there is actually a file, use it, if not exit
     if [ -f $FILENAME ]; then
-        exec < $FILENAME
+        readarray filelist < $FILENAME
     else
-        exec 0<&6 6<&-
         echo "ERROR: [-f] Must be a file."
-        echo "$USAGE"
+        echo "$HELPTEXT"
         exit 1
     fi
+
+# If the -f flag (file containing paths) is NOT used and the -i flag (single
+# path given on cmdline) is used...
 elif [[ -z $FILENAME && -n $SINGLE ]]; then
+    # check that the path exists, if not exit
     if [ -d $SINGLE ]; then
         echo $SINGLE > $TMPFILE
-        exec < $TMPFILE
+        readarray filelist < $TMPFILE
     else
-        exec 0<&6 6<&-
         echo "ERROR: [-i] Must be a directory."
-        echo "$USAGE"
+        echo "$HELPTEXT"
         exit 1
     fi
+
+# If the f and i flags are both set, show help and quit. Can't have both
 elif [[ -n $FILENAME && -n $SINGLE ]]; then
-    # If the f and i flags are both set, show help and quit. Can't have both
-    exec 0<&6 6<&-
     echo "$HELPTEXT"
     exit 1
+
+# If no f or i flag, then assume updating only the current directory.
 else
-    # If no f or i flag, then assume updating only the current directory.
     # Previous behavior was to prompt for file containing list or update 
     # the current directory.
     pwd > $TMPFILE
-    exec < $TMPFILE
+    readarray filelist < $TMPFILE
 fi
 
-# Initialize the variable for the array index counter
+
+# Initialize the variable for the array index counter, declare the array
 CNT=''
-while read line
+declare -a filearray
+# Go through each item/line in the array, and check if it contains a
+# semi-colon. If so it is a comment, so don't put it into a new array.
+for line in "${filelist[@]}"
 do
     # Check if line is commented, if not add to the array
     comment=";"
@@ -324,9 +360,24 @@ do
     esac
 done
 
-exec 0<&6 6<&-
 
-if [[ -z "${CONFIG-}" ]]; then
+
+################################################################################
+#                                                                              #
+#        Things to do before running backup and upgrade on each path.          #
+#                                                                              #
+#                                                                              #
+#                                                                              #
+################################################################################
+
+# Check if the filearray, list of paths, is empty, if so exit.
+if [[ ${#filearray[@]} -eq 0 ]]; then
+    echo "No locations specified in list. Make sure at least one path is uncommented."
+    exit 1
+fi
+
+# Ask for MySQL account info if -c flag is used.
+if [[ "true" == "${CONFIG-}" ]]; then
     ask_db_account
 fi
 
@@ -339,11 +390,19 @@ fi
 #                                                                              #
 ################################################################################
 
+
 # Loop through all of the paths from the file, or the current dir
 for path in ${filearray[@]}
 do
 
-    # Check to make sure the path is actually a directory
+
+    ################################################################
+    #                                                              #
+    #          Checks for this path before upgrading               #
+    #                                                              #
+    ################################################################
+    # Check to make sure the path is actually a directory, if not continue with
+    # the next path
     if [[ ! -d $path ]]; then
         echo -e "$red $path does not exist. $reset"
         continue
@@ -378,46 +437,52 @@ do
     ################################################################
 #:<<'COMMENT5'
 
+    ###################     File/Path Info    ##################
     # Get rid of trailing slash if there.
     path=${path%/}
 
-    #Get the base folder name of the install - the name of the website.
+    #Get the base folder name of the install - the name of the website/project.
     sitename=`pwd | sed -r -e "s/\//-/g"`
 
-    # Get the server owner and group
+    # Get the folder owner and group
     ownr=`ls -lad ${path} | cut -f3 -d" "`
     grp=`ls -lad ${path} | cut -f4 -d" "`
 
+
+    ###################      MySQL info      ###################
+
     # Get information from the wp-config.php file in order to make
     #   a backup copy 
+
+    # if the -c flag is not used, then get the sql user/pass from the
+    # wp-config.php file, otherwise user was prompted for them already.
+    if [[ -z "${CONFIG-}" ]]; then
+        sqluser=$(get_config_value DB_USER $path)
+        sqlpass=$(get_config_value DB_PASSWORD $path)
+    fi
+
         # Get the database name
     if [[ -z "${DBNAME-}" ]]; then
-        db_name=`get_config_value DB_NAME $path`
+        db_name=$(get_config_value DB_NAME $path)
     else
-        # If the 'd' flag was used, set that value as the database name
+        # If the 'd' flag was used, use that value as the database name
         db_name=$DBNAME
     fi
 
-        # If the 'c' flag is used, grab the db user and pass from the config file
-    if [[ -n "${CONFIG-}" ]]; then
-        sqluser=`get_config_value DB_USER $path`
-        sqlpass=`get_config_value DB_PASSWORD $path`
-        db_name=`get_config_value DB_NAME $path`
-    fi
     
         # if the sqlpass has a space in it, then prompt for a MySQL user
         # account with privileges to acess the database
     if [[ "$sqlpass" == *" "* ]]; then
         echo "MySQL password in wp-config.php has a space, which breaks the mysqldump command. Please use a different MySQL account."
-        echo "disabled for testing... put sqlpass variable in quotes"
+        echo "disabled for testing... put sqlpass variable in quotes in the mysql command"
         #ask_db_account
     fi
 
 
         # Get the table prefix
-    tb_prefix=`grep "table_prefix" ${path}/wp-config.php | sed -r -e "s/.*'([^']+)'.*/\1/"`
+    tb_prefix=$(grep "table_prefix" ${path}/wp-config.php | sed -r -e "s/.*'([^']+)'.*/\1/")
         # Get a list of the tables
-    table_list=`mysql -u$sqluser -p"$sqlpass" $db_name --raw --silent --silent --execute="SHOW TABLES;"`
+    table_list=$(mysql -u$sqluser -p"$sqlpass" $db_name --raw --silent --silent --execute="SHOW TABLES;")
 
 
 #COMMENT5
@@ -434,11 +499,17 @@ do
     else
 
         # Create a temporary backup folder for this install
-        if [[ ! -d $TMPDIR/$sitename ]]; then
-            mkdir $TMPDIR/$sitename
+        tmpsite="${TMPDIR}/${sitename}"
+        if [[ 'true' == $NOSUDO ]]; then
+            if [[ ! -d $tmpsite ]]; then
+                mkdir -p $tmpsite
+            fi
+        else
+            if [[ ! -d $tmpsite ]]; then
+                sudo mkdir -p $tmpsite
+            fi
         fi
         echo "Creating location for temporary backup at: $tmpsite"
-        tmpsite="$TMPDIR/$sitename"
 
         #     Make a backup of the wp-content folder and the MySQL DB  
         echo "Creating backup of MySQL database..."
@@ -452,12 +523,13 @@ do
             fi
         done
         # Use mysqldump to make an sql file of the correct tables. Dumps go in temporary folder
+        sqlfile="${tmpsite}/${db_name}_${tb_prefix}BACKUP-${CURDATE}.sql"
         if [[ 'true' == $NOSUDO ]]; then
-            mysqldump -u$sqluser -p"$sqlpass" --single-transaction --opt $db_name $tables > ${tmpsite}/${db_name}_${tb_prefix}BACKUP-${CURDATE}.sql
-            zip -q ${tmpsite}/${db_name}_${tb_prefix}BACKUP-${CURDATE}.sql.zip ${tmpsite}/${db_name}_${tb_prefix}BACKUP-${CURDATE}.sql
+            mysqldump -u$sqluser -p"$sqlpass" --single-transaction --opt $db_name $tables > $sqlfile
+            zip -q ${sqlfile}.zip $sqlfile
         else
-            sudo mysqldump -u$sqluser -p"$sqlpass" --single-transaction --opt $db_name $tables > ${tmpsite}/${db_name}_${tb_prefix}BACKUP-${CURDATE}.sql
-            sudo zip -q ${tmpsite}/${db_name}_${tb_prefix}BACKUP-${CURDATE}.sql.zip ${tmpsite}/${db_name}_${tb_prefix}BACKUP-${CURDATE}.sql
+            sudo mysqldump -u$sqluser -p"$sqlpass" --single-transaction --opt $db_name $tables > $sqlfile
+            sudo zip -q ${sqlfile}.zip $sqlfile
         fi
 
         echo "Creating backup of 'wp-content'..."
@@ -467,23 +539,30 @@ do
         #   archive only if it has been modified more recently than the
         #   version already in the zip archive.
         #   zip -r flag: recursively
+        CONTENTBK="wp-content-backup.zip"
         if [[ 'true' == $NOSUDO ]]; then
-            zip -qur ${path}/${CONTENTBK} ${tmpsite}/wp-content
+            zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content
         else
-            sudo zip -qur ${path}/${CONTENTBK} ${tmpsite}/wp-content
+            sudo zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content
         fi
 
     fi # end of backing up 
 #COMMENT4
 
 
-    ################################################################
-    #                                                              #
-    #                   REPOSITORY CHECK                           #
-    #                                                              #
-    ################################################################
-#:<<'COMMENT3'
+
+    # Check if any SVN flags were used
     if [[ -n "${BRANCH-}" || -n "${NEWURL-}" || -n "${TAGS-}" || -n "${SVNOPT-}" ]]; then
+
+
+    ################################################################
+    #                                                              #
+    #                     UPDATE WITH SVN                          # 
+    #                                                              #
+    ################################################################
+
+    ###############     REPOSITORY CHECK       #######################
+#:<<'COMMENT3'
         # Check if it's the right repository, if not prompt to use
         #   current or to switch to the default
             # Get the current repository used
@@ -513,17 +592,11 @@ do
         else
             userepo=$SVNBASE
         fi
-    fi # end check if SVN flags used
 #COMMENT3
 
 
-    ################################################################
-    #                                                              #
-    #                         RUN SVN                              #
-    #                                                              #
-    ################################################################
+    #################         RUN SVN        #########################
 #:<<'COMMENT2'
-    if [[ -n "${BRANCH-}" || -n "${NEWURL-}" || -n "${TAGS-}" || -n "${SVNOPT-}" ]]; then
         # Set whether it's an update or a switch. Use update by default
         #   (if option was not given).
         if [ -z $SVNOPT ]; then
@@ -597,20 +670,31 @@ do
             svnconflicts=`grep "C " $SVNREPORTFILE` 
             echo -e "SVN had the following errors: \n $red $svnconflicts $reset"
         fi
-    fi  # end check if SVN flags used
 #COMMENT2
 
 
+    
+    # if SVN flags were not used, then update using the copy command and the
+    # latest version downloaded from wordpress.org and stored in the temp
+    # folder 
+    else 
+
     ################################################################
     #                                                              #
-    #                    Update WP install                         #
+    #               UPDATE WITH COPY COMMAND                       #
     #                                                              #
     ################################################################
 ###:<<COMMENT02
 
 
+        cp -rf $TMPWPDIR/wordpress/* $path/
+
 
 #COMMENT02
+    fi  # end check if SVN flags used
+
+
+
     ################################################################
     #                                                              #
     #                    Secure WP install                         #
@@ -728,11 +812,11 @@ RewriteRule .* - [F,NS,L]
         if [[ 'true' == $NOSUDO ]]; then
             find $path -type d -exec chmod ug=rwx,g+s,o=rx '{}' \;
             find $path -type f -exec chmod 664 '{}' \;
-            chown -R $ownr:$grp ${path}
+            chown -R $ownr ${path}
         else
             sudo find $path -type d -exec chmod ug=rwx,g+s,o=rx '{}' \;
             sudo find $path -type f -exec chmod 664 '{}' \;
-            sudo chown -R $ownr:$grp ${path}
+            sudo chown -R $ownr ${path}
         fi
     fi
 
@@ -782,6 +866,5 @@ RewriteRule .* - [F,NS,L]
 done
 
 
-clean_up_tmp
 
 exit 0
