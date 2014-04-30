@@ -31,10 +31,9 @@ SVNREPORT="svnreport-$CURDATE"
 # http://codex.WordPress.org/Installing/Updating_WordPress_with_Subversion
 OLDBASE="http://svn.automattic.com/wordpress"
 SVNBASE="http://core.svn.wordpress.org"
-WPLATEST="http://wordpress.org/latest.zip"
 TMPFILE=`mktemp` || exit 1
 TMPDIR="/tmp/wpupdate"
-TMPWPDIR="/tmp/wupupdate/latest-wp"
+TMPWPDIR="/tmp/wpupdate/latest-wp"
 
 LATESTWP=`curl -s http://wordpress.org/download/ | grep "latest stable release of WordPress" | cut -d"(" -f2 | cut -d")" -f1 | cut -d" " -f2`
 
@@ -263,7 +262,7 @@ shift $(($OPTIND - 1))
 
 ################################################################################
 #                                                                              #
-#               Temporary locations and Latest WordPress                       #
+#               Temporary locations and WordPress Version                      #
 #                                                                              #
 #                                                                              #
 #                                                                              #
@@ -280,13 +279,38 @@ if [[ ! -d $TMPWPDIR ]]; then
     mkdir -p $TMPWPDIR
 fi
 
-cd $TMPWPDIR
 
-# Dowload a copy of the latest version of WordPress
-wget -nv -O latest.zip http://wordpress.org/latest.zip
-# Unpackage it
-unzip -q latest.zip
+# If the -V flag is not used, use the latest version
+if [[ -z ${WPVERSION-} ]]; then
+    wpfile="latest.zip"
+    WPVERSION=${LATESTWP}
 
+# Otherwise use the requested version
+else
+    wpfile="wordpress-${WPVERSION}.zip"
+fi
+
+# Check if the version has already been downloaded and unzipped in the past, if
+# so, we'll use that later on, if not, then download and unzip it.
+if [[ ! -d ${TMPWPDIR}/${WPVERSION} ]]; then
+
+    if [[ 'true' == $NOSUDO ]]; then
+            # Get the requested version
+        wget -nv -O ${TMPWPDIR}/${WPVERSION}.zip http://wordpress.org/${wpfile}
+            # Unpackage it
+        unzip -oq ${TMPWPDIR}/${WPVERSION}.zip -d ${TMPWPDIR}/${WPVERSION}
+            # Remove zip file
+        rm -f ${TMPWPDIR}/${WPVERSION}.zip
+    else
+            # Get the requested version
+        sudo wget -nv -O ${TMPWPDIR}/${WPVERSION}.zip http://wordpress.org/${wpfile}
+            # Unpackage it
+        sudo unzip -oq ${TMPWPDIR}/${WPVERSION}.zip -d ${TMPWPDIR}/${WPVERSION}
+            # Remove zip file
+        sudo rm -f ${TMPWPDIR}/${WPVERSION}.zip
+    fi
+
+fi
 
 
 
@@ -687,7 +711,7 @@ do
 ###:<<COMMENT02
 
 
-        cp -rf $TMPWPDIR/wordpress/* $path/
+        cp -rf $TMPWPDIR/wpversions/${WPVERSION}/wordpress/* $path/
 
 
 #COMMENT02
