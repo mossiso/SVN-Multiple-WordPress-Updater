@@ -710,7 +710,11 @@ do
 
         echo "Updating WordPress core files"
 
-        cp -rf $TMPWPDIR/${WPVERSION}/wordpress/* $path/
+        if [[ 'true' == $NOSUDO ]]; then
+            cp -rf $TMPWPDIR/${WPVERSION}/wordpress/* $path/ 
+        else
+            sudo cp -rf $TMPWPDIR/${WPVERSION}/wordpress/* $path/ 
+        fi
 
 
 #COMMENT02
