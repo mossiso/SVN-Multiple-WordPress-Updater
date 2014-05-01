@@ -26,13 +26,14 @@ white='\E[1;37;40m'
 reset=$(tput sgr0)
 
 # Constants
+RANDOM=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
 CURDATE=$(date +%F)
 SVNREPORT="svnreport-$CURDATE"
 # http://codex.WordPress.org/Installing/Updating_WordPress_with_Subversion
 OLDBASE="http://svn.automattic.com/wordpress"
 SVNBASE="http://core.svn.wordpress.org"
-TMPFILE=$(mktemp) || exit 1
-TMPDIR=$(mktemp -d) || exit 1
+TMPDIR="$HOME/wp-tmp"
+TMPFILE="${TMPDIR}/${RANDOM}"
 TMPWPDIR="${TMPDIR}/latest-wp"
 
 LATESTWP=$(curl -s http://wordpress.org/download/ | grep "latest stable release of WordPress" | cut -d"(" -f2 | cut -d")" -f1 | cut -d" " -f2)
@@ -139,8 +140,11 @@ THINGS TO KNOW:
     account and connection information. If it can not find the information, the
     script prompts for a MySQL user and password.
 
+    The script saves a copy of the downloaded WordPress version in the home
+    directory ('$TMPWPDIR') so that subsequent calls to the script use the already downloaded
+    version.  
     
-'
+    '
 
 
 ###################       FUNCTIONS     ########################################
@@ -252,7 +256,7 @@ shift $(($OPTIND - 1))
 #                                                                              #
 ################################################################################
 
-    # If it doesn't exist, make a temp directory to stash stuff later
+# If it doesn't exist, make a temporary directory for WP versions and backups.
 if [[ ! -d $TMPDIR ]]; then
     if [[ 'true' == $NOSUDO ]]; then
         mkdir -p $TMPDIR
@@ -261,7 +265,7 @@ if [[ ! -d $TMPDIR ]]; then
     fi
 fi
 
-    # create a temp folder for the latest wp
+# Create a temp folder for the selected WP version.
 if [[ ! -d $TMPWPDIR ]]; then
     if [[ 'true' == $NOSUDO ]]; then
         mkdir -p $TMPWPDIR
@@ -272,18 +276,17 @@ fi
 
 
 
-# If the -V flag is not used, use the latest version
+# If the -V flag is not used, use the latest version.
 if [[ -z ${WPVERSION-} ]]; then
     wpfile="latest.zip"
     WPVERSION=${LATESTWP}
-
-# Otherwise use the requested version
 else
+    # Otherwise use the requested version.
     wpfile="wordpress-${WPVERSION}.zip"
 fi
 
 # Check if the version has already been downloaded and unzipped in the past, if
-# so, we'll use that later on, if not, then download and unzip it.
+# so, we'll use that later on. If not, then download and unzip it.
 if [[ ! -d ${TMPWPDIR}/${WPVERSION} ]]; then
     echo "Grabbing version ${WPVERSION} of WordPress"
 
@@ -377,6 +380,16 @@ do
 done
 
 
+
+# Remove the tempfile
+if [ -f $TMPFILE ]; then
+    if [[ 'true' == $NOSUDO ]]; then
+        rm -f $TMPFILE
+    else
+        sudo rm -f $TMPFILE
+    fi
+    echo
+fi
 
 
 
@@ -500,7 +513,7 @@ do
         # Get the table prefix
     tb_prefix=$(grep "table_prefix" ${path}/wp-config.php | sed -r -e "s/.*'([^']+)'.*/\1/")
         # Get a list of the tables
-    table_list=$(mysql -u$sqluser -p"$sqlpass" $db_name --raw --silent --silent --execute="SHOW TABLES;")
+    table_list=$(mysql -u${sqluser} --password="${sqlpass}" $db_name --raw --silent --silent --execute="SHOW TABLES;")
 
 
 #COMMENT5
@@ -541,12 +554,12 @@ do
         # Use mysqldump to make an sql file of the correct tables. Dumps go in temporary folder
         sqlfile="${tmpsite}/${db_name}_${tb_prefix}BACKUP-${CURDATE}.sql"
         if [[ 'true' == $NOSUDO ]]; then
-            mysqldump -u$sqluser -p"$sqlpass" --single-transaction --opt $db_name $tables > $sqlfile
+            mysqldump -u${sqluser} --password="${sqlpass}" --single-transaction --opt $db_name $tables > $sqlfile
             zip -q ${sqlfile}.zip $sqlfile
             rm -f ${sqlfile}
         else
             # Run this command through bash -c so that sudo applies to writing the redirection to file
-            sudo bash -c "mysqldump -u$sqluser -p"$sqlpass" --single-transaction --opt $db_name $tables > $sqlfile"
+            sudo bash -c "mysqldump -u${sqluser} --password=\"${sqlpass}\" --single-transaction --opt $db_name $tables > $sqlfile"
             sudo zip -q ${sqlfile}.zip $sqlfile
             sudo rm -f ${sqlfile}
         fi
@@ -860,9 +873,9 @@ RewriteRule .* - [F,NS,L]
     echo
         # get the url of the site, unset variable first.
     url=''
-    url=( $(mysql -u$sqluser -p$sqlpass $db_name --raw --silent --silent --execute="SELECT option_value FROM ${tb_prefix}options WHERE option_name='siteurl' LIMIT 1") )
+    url=( $(mysql -u${sqluser} --password="${sqlpass}" $db_name --raw --silent --silent --execute="SELECT option_value FROM ${tb_prefix}options WHERE option_name='siteurl' LIMIT 1") )
         # Set the home to be the same as the url, in case it isn't in the database.
-    homeurl=( $(mysql -u$sqluser -p$sqlpass $db_name --raw --silent --silent --execute="SELECT option_value FROM ${tb_prefix}options WHERE option_name='home' LIMIT 1") )
+    homeurl=( $(mysql -u${sqluser} --password="${sqlpass}" $db_name --raw --silent --silent --execute="SELECT option_value FROM ${tb_prefix}options WHERE option_name='home' LIMIT 1") )
     if [[ -z "${homeurl-}" ]]; then
         homeurl=$url
     fi
@@ -873,7 +886,7 @@ RewriteRule .* - [F,NS,L]
     urlCheck=( ${url:0:4} )
     if [[ 'http' == $urlCheck ]]; then
         echo -e "Running DB update on $blue $homeurl $reset"
-        curl -o /dev/null "$url/wp-admin/upgrade.php?step=1&backto="
+        curl -o /dev/null "$url/wp-admin/upgrade.php?step=1&backto=%2Fwp-admin%2F"
     else
         echo -e "Remember to run the upgrade script for $red $homeurl $reset!!"
     fi
@@ -883,15 +896,5 @@ RewriteRule .* - [F,NS,L]
 
 done
 
-
-# remove the tempfile when updating the current directory
-if [ -f $TMPFILE ]; then
-    if [[ 'true' == $NOSUDO ]]; then
-        rm -f $TMPFILE
-    else
-        sudo rm -f $TMPFILE
-    fi
-    echo
-fi
 
 exit 0

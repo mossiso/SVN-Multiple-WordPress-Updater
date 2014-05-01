@@ -94,3 +94,7 @@ THINGS TO KNOW:
     account and connection information. If it can not find the information, the
     script prompts for a MySQL user and password.
 
+    The script saves a copy of the downloaded WordPress version in the home
+    directory ('$TMPWPDIR') so that subsequent calls to the script use the already downloaded
+    version.  
+    
