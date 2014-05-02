@@ -563,11 +563,13 @@ do
         #   archive only if it has been modified more recently than the
         #   version already in the zip archive.
         #   zip -r flag: recursively
+        #   zip -x flag: exclude directories, specifically cache directories.
+        #   Also deletes wp-super-cache plugin...
         CONTENTBK="wp-content-backup.zip"
         if [[ 'true' == $NOSUDO ]]; then
-            zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content
+            zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content -x"*cache/*"
         else
-            sudo zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content
+            sudo zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content -x"*cache/*"
         fi
 
     fi # end of backing up 
@@ -712,7 +714,9 @@ do
     ################################################################
 ###:<<COMMENT02
 
-        echo "Updating WordPress core files"
+        echo    
+        echo -e "${cyan}Updating WordPress core files.${reset}"
+        echo
 
         if [[ 'true' == $NOSUDO ]]; then
             cp -rf $TMPWPDIR/${WPVERSION}/wordpress/* $path/ 
@@ -839,7 +843,7 @@ RewriteRule .* - [F,NS,L]
     if [[ 'true' == $SKIPFIX ]]; then
         echo "Skipping permissions fixing..."
     else
-        echo "Fixing permissions ..."
+        echo "Fixing permissions on $path..."
         if [[ 'true' == $NOSUDO ]]; then
             find $path -type d -exec chmod ug=rwx,g+s,o=rx '{}' \;
             find $path -type f -exec chmod 664 '{}' \;
