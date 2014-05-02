@@ -554,12 +554,12 @@ do
         # Use mysqldump to make an sql file of the correct tables. Dumps go in temporary folder
         sqlfile="${tmpsite}/${db_name}_${tb_prefix}BACKUP-${CURDATE}.sql"
         if [[ 'true' == $NOSUDO ]]; then
-            mysqldump -u${sqluser} --password="${sqlpass}" --single-transaction --opt $db_name $tables > $sqlfile
+            mysqldump -u${sqluser} --password='${sqlpass}' --single-transaction --opt $db_name $tables > $sqlfile
             zip -q ${sqlfile}.zip $sqlfile
             rm -f ${sqlfile}
         else
             # Run this command through bash -c so that sudo applies to writing the redirection to file
-            sudo bash -c "mysqldump -u${sqluser} --password=\"${sqlpass}\" --single-transaction --opt $db_name $tables > $sqlfile"
+            sudo bash -c "mysqldump -u${sqluser} --password='${sqlpass}' --single-transaction --opt $db_name $tables > $sqlfile"
             sudo zip -q ${sqlfile}.zip $sqlfile
             sudo rm -f ${sqlfile}
         fi
