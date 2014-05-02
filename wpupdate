@@ -501,15 +501,6 @@ do
     fi
 
     
-        # if the sqlpass has a space in it, then prompt for a MySQL user
-        # account with privileges to acess the database
-    if [[ "$sqlpass" == *" "* ]]; then
-        echo "MySQL password in wp-config.php has a space, which breaks the mysqldump command. Please use a different MySQL account."
-        echo "disabled for testing... put sqlpass variable in quotes in the mysql command"
-        #ask_db_account
-    fi
-
-
         # Get the table prefix
     tb_prefix=$(grep "table_prefix" ${path}/wp-config.php | sed -r -e "s/.*'([^']+)'.*/\1/")
         # Get a list of the tables
