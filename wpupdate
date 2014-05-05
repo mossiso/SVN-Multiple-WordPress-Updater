@@ -769,9 +769,16 @@ do
 
             # Test for setfacl program, then remove all ACL's. We shouldn't need them.
             is_setfacl=`which setfacl`
-            if [[ -n "$is_setfacl" ]]; then
-                sudo find $uploads -type d -exec setfacl -b '{}' \;
-                sudo find $uploads -type f -exec setfacl -b '{}' \;
+            if [[ 'true' == $NOSUDO ]]; then
+                if [[ -n "$is_setfacl" ]]; then
+                    find $uploads -type d -exec setfacl -b '{}' \;
+                    find $uploads -type f -exec setfacl -b '{}' \;
+                fi
+            else
+                if [[ -n "$is_setfacl" ]]; then
+                    sudo find $uploads -type d -exec setfacl -b '{}' \;
+                    sudo find $uploads -type f -exec setfacl -b '{}' \;
+                fi
             fi
 
 
@@ -814,10 +821,18 @@ RewriteRule .* - [F,NS,L]
                     echo -e "      ${yellow}[ a ]:  append to end of file${reset}"
                     echo -e "      ${blue}[ w ]:  write over file${reset}"
                     read changefile
-                    if [[ "w" == "$changefile" ]]; then
-                        sudo echo "$htcontent" > $htfile
-                    elif [[ "a" == "$changefile" ]]; then
-                        sudo echo "$htcontent" >> $htfile
+                    if [[ 'true' == $NOSUDO ]]; then
+                        if [[ "w" == "$changefile" ]]; then
+                            echo "$htcontent" > $htfile
+                        elif [[ "a" == "$changefile" ]]; then
+                            echo "$htcontent" >> $htfile
+                        fi
+                    else
+                        if [[ "w" == "$changefile" ]]; then
+                            sudo bash -c "echo '$htcontent' > $htfile"
+                        elif [[ "a" == "$changefile" ]]; then
+                            sudo bash -c "echo '$htcontent' >> $htfile"
+                        fi
                     fi
                 else
                     echo -e "      ${green}.htaccess file looks fine.${reset}"
@@ -826,7 +841,11 @@ RewriteRule .* - [F,NS,L]
             else
                 echo
                 echo -e "$reset Created .htaccess file"
-                sudo echo "$htcontent" > $htfile
+                if [[ 'true' == $NOSUDO ]]; then
+                    echo "$htcontent" > $htfile
+                else
+                    sudo bash -c "echo '$htcontent' > $htfile"
+                fi
             fi
 
 
