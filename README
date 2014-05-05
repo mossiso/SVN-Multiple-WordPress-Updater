@@ -76,7 +76,7 @@ OPTIONS:
 WHAT IT DOES:
     First the wpupudate program makes a backup copy of the MySQL database and
     the wp-contents/ directory. It places these backups in a temporary
-    directory (/tmp/wpupdate).
+    directory.
     
 
 THINGS TO KNOW:
@@ -95,6 +95,7 @@ THINGS TO KNOW:
     script prompts for a MySQL user and password.
 
     The script saves a copy of the downloaded WordPress version in the home
-    directory ('$TMPWPDIR') so that subsequent calls to the script use the already downloaded
-    version.  
+    directory when run without sudo, or in the /tmp directory when run with
+    sudo (default), so that subsequent calls to the script use the already
+    downloaded version.  
     
