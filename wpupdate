@@ -32,10 +32,6 @@ SVNREPORT="svnreport-$CURDATE"
 # http://codex.WordPress.org/Installing/Updating_WordPress_with_Subversion
 OLDBASE="http://svn.automattic.com/wordpress"
 SVNBASE="http://core.svn.wordpress.org"
-TMPDIR="$HOME/wp-tmp"
-TMPFILE="${TMPDIR}/${RANDOM}"
-TMPWPDIR="${TMPDIR}/latest-wp"
-
 LATESTWP=$(curl -s http://wordpress.org/download/ | grep "latest stable release of WordPress" | cut -d"(" -f2 | cut -d")" -f1 | cut -d" " -f2)
 
 
@@ -122,7 +118,7 @@ OPTIONS:
 WHAT IT DOES:
     First the wpupudate program makes a backup copy of the MySQL database and
     the wp-contents/ directory. It places these backups in a temporary
-    directory ('$TMPDIR').
+    directory.
     
 
 THINGS TO KNOW:
@@ -141,8 +137,9 @@ THINGS TO KNOW:
     script prompts for a MySQL user and password.
 
     The script saves a copy of the downloaded WordPress version in the home
-    directory ('$TMPWPDIR') so that subsequent calls to the script use the already downloaded
-    version.  
+    directory when run without sudo, or in the /tmp directory when run with
+    sudo (default), so that subsequent calls to the script use the already
+    downloaded version.  
     
     '
 
@@ -255,6 +252,19 @@ shift $(($OPTIND - 1))
 #                                                                              #
 #                                                                              #
 ################################################################################
+
+# If using sudo, create the temporary locations in /tmp, otherwise use user's
+# home directory
+if [[ 'true' == $NOSUDO ]]; then
+    TMPDIR="$HOME/wp-tmp"
+    TMPFILE="${TMPDIR}/${RANDOM}"
+    TMPWPDIR="${TMPDIR}/latest-wp"
+else
+    TMPDIR="/tmp/wp-tmp"
+    TMPFILE="${TMPDIR}/${RANDOM}"
+    TMPWPDIR="${TMPDIR}/latest-wp"
+
+fi
 
 # If it doesn't exist, make a temporary directory for WP versions and backups.
 if [[ ! -d $TMPDIR ]]; then
@@ -571,6 +581,8 @@ do
         else
             sudo zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content -x"*cache/*"
         fi
+
+        echo "Bacakup created."
 
     fi # end of backing up 
 #COMMENT4
