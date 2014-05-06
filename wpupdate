@@ -560,9 +560,9 @@ do
         #   Also deletes wp-super-cache plugin...
         CONTENTBK="wp-content-backup.zip"
         if [[ 'true' == $NOSUDO ]]; then
-            zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content -x"*cache/*"
+            zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content -x *cache*
         else
-            sudo zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content -x"*cache/*"
+            sudo zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content -x *cache*
         fi
 
         echo "Bacakup created."
