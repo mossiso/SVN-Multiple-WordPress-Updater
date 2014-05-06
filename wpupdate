@@ -257,11 +257,9 @@ shift $(($OPTIND - 1))
 # home directory
 if [[ 'true' == $NOSUDO ]]; then
     TMPDIR="$HOME/wp-tmp"
-    TMPFILE="${TMPDIR}/${RANDOM}"
     TMPWPDIR="${TMPDIR}/latest-wp"
 else
     TMPDIR="/tmp/wp-tmp"
-    TMPFILE="${TMPDIR}/${RANDOM}"
     TMPWPDIR="${TMPDIR}/latest-wp"
 
 fi
@@ -327,16 +325,31 @@ fi
 #                                                                              #
 ################################################################################
 
-# Get the array containing the full paths to the Wordpress installs to
-# update from a file, using Bash v4 default readarray
-
-declare -a filelist
 # If the -f flag (file containing paths) is used and the -i flag (single path
 # given on cmdline) is NOT used...
 if [[ -n $FILENAME && -z $SINGLE ]]; then
     # if there is actually a file, use it, if not exit
     if [ -f $FILENAME ]; then
-        readarray filelist < $FILENAME
+        cnt=''
+        # Read each line of the file into the filelist variable
+        while IFS= read -r filelist 
+        do
+            # Check each line of the file as it is read
+            case $filelist in
+                # if the line begins with a semi-colon, do nothing
+                *";"*)
+                ;;
+                # if the line does not begin with a semi-colon, then 
+                *)
+                    # increase the internal counter
+                    cnt=$[cnt+1]
+                    # add the line to the filearray array (with the increased
+                    # array index)
+                    filearray[$cnt]=${filelist}
+                ;;
+                esac
+        # Read in the lines from the FIELNAME file
+        done < $FILENAME
     else
         echo "ERROR: [-f] Must be a file."
         echo "$HELPTEXT"
@@ -348,8 +361,9 @@ if [[ -n $FILENAME && -z $SINGLE ]]; then
 elif [[ -z $FILENAME && -n $SINGLE ]]; then
     # check that the path exists, if not exit
     if [ -d $SINGLE ]; then
-        echo $SINGLE > $TMPFILE
-        readarray filelist < $TMPFILE
+        # If the path exists, set the path as the only element in the filearray
+        # array
+        filearray[0]="$SINGLE"
     else
         echo "ERROR: [-i] Must be a directory."
         echo "$HELPTEXT"
@@ -365,40 +379,9 @@ elif [[ -n $FILENAME && -n $SINGLE ]]; then
 else
     # Previous behavior was to prompt for file containing list or update 
     # the current directory.
-    pwd > $TMPFILE
-    readarray filelist < $TMPFILE
-fi
-
-
-# Initialize the variable for the array index counter, declare the array
-CNT=''
-declare -a filearray
-# Go through each item/line in the array, and check if it contains a
-# semi-colon. If so it is a comment, so don't put it into a new array.
-for line in "${filelist[@]}"
-do
-    # Check if line is commented, if not add to the array
-    comment=";"
-    case $line in
-        *"$comment"*)
-            ;;
-        *)
-            CNT=$[CNT+1]
-            filearray[$CNT]=$line
-            ;;
-    esac
-done
-
-
-
-# Remove the tempfile
-if [ -f $TMPFILE ]; then
-    if [[ 'true' == $NOSUDO ]]; then
-        rm -f $TMPFILE
-    else
-        sudo rm -f $TMPFILE
-    fi
-    echo
+    # If no path (-i flag) or file containing paths (-f flag) is given, then
+    # set the current directory path as the only element in the fiel array
+    filearray[0]=$(pwd)
 fi
 
 
@@ -413,7 +396,7 @@ fi
 
 # Check if the filearray, list of paths, is empty, if so exit.
 if [[ ${#filearray[@]} -eq 0 ]]; then
-    echo "No locations specified in list. Make sure at least one path is uncommented."
+    echo "No WordPress locations specified. If using -f flag, make sure at least one path is uncommented. If using -i flag, make sure a full path to a location is given."
     exit 1
 fi
 
