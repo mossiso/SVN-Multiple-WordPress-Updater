@@ -450,7 +450,7 @@ do
     cd $path
 
     echo
-    echo "---------------------------------------------"
+    echo "-------------------------------------------------------"
     echo -e "Updating $green $path $reset"
     echo
 
@@ -522,7 +522,8 @@ do
                 sudo mkdir -p $tmpsite
             fi
         fi
-        echo "Creating location for temporary backup at: $tmpsite"
+        echo "Creating location for temporary backup at: "
+        echo "  $tmpsite"
 
         #     Make a backup of the wp-content folder and the MySQL DB  
         echo "Creating backup of MySQL database..."
@@ -564,8 +565,6 @@ do
         else
             sudo zip -qur ${tmpsite}/${CONTENTBK} ${path}/wp-content -x *cache*
         fi
-
-        echo "Bacakup created."
 
     fi # end of backing up 
 #COMMENT4
@@ -899,6 +898,8 @@ RewriteRule .* - [F,NS,L]
     else
         echo -e "Remember to run the upgrade script for $red $homeurl $reset!!"
     fi
+    echo "_______________________________________________________"
+    echo 
     echo 
 
 #COMMENT0
