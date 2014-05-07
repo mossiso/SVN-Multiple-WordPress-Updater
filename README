@@ -38,6 +38,8 @@ OPTIONS:
 
  -k     skip backing up the wp-content folder and database
 
+ -m     Set the temp path, /tmp by default.
+
  -n     run as a normal user, do not use sudo
 
  -o [/path/to/filename]     

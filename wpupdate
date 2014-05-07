@@ -80,6 +80,8 @@ OPTIONS:
 
  -k     skip backing up the wp-content folder and database
 
+ -m     Set the temp path, /tmp by default.
+
  -n     run as a normal user, do not use sudo
 
  -o [/path/to/filename]     
@@ -198,20 +200,21 @@ BRANCH=''
 CONFIG=''
 DBNAME=''
 FILENAME=''
-SINGLE=''
+NEWURL=''
 NOBACKUP=''
 NOSUDO=''
 REPORTPATH=''
-NEWURL=''
-TAGS=''
-SVNOPT=''
+SINGLE=''
 SKIPFIX=''
 SKIPSECURE=''
+SVNOPT=''
+TAGS=''
+TEMPSET=''
 WPVERSION=''
 
 
 # Get the options
-while getopts "bcd:f:hi:kno:prs:tuvV:wx" options; do
+while getopts "bcd:f:hi:km:no:prs:tuvV:wx" options; do
     case $options in
         b ) BRANCH="branches";;
         c ) CONFIG='true';;
@@ -221,6 +224,7 @@ while getopts "bcd:f:hi:kno:prs:tuvV:wx" options; do
             exit 0;;
         i ) SINGLE="$OPTARG";;
         k ) NOBACKUP='true';;
+        m ) TEMPSET="$OPTARG";;
         n ) NOSUDO='true';;
         o ) REPORTPATH="$OPTARG";;
         p ) SKIPSECURE="true";;
@@ -253,13 +257,12 @@ shift $(($OPTIND - 1))
 #                                                                              #
 ################################################################################
 
-# If using sudo, create the temporary locations in /tmp, otherwise use user's
-# home directory
-if [[ 'true' == $NOSUDO ]]; then
-    TMPDIR="$HOME/wp-tmp"
+# If the -m flag is not used, set tmp to /tmp directory, otherwise use -m value
+if [[ -z ${TEMPSET} ]]; then
+    TMPDIR="/tmp/wp-tmp"
     TMPWPDIR="${TMPDIR}/latest-wp"
 else
-    TMPDIR="/tmp/wp-tmp"
+    TMPDIR="${TEMPSET}/wp-tmp"
     TMPWPDIR="${TMPDIR}/latest-wp"
 
 fi
