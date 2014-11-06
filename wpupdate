@@ -15,14 +15,15 @@ set -e
 set -u 
 
 # Set colors for echo
-black='\E[30;40m'
-red='\E[1;31;40m'
-green='\E[32;40m'
-yellow='\E[33;40m'
-blue='\E[1;34;40m'
-magenta='\E[35;40m'
-cyan='\E[36;40m'
-white='\E[1;37;40m'
+ESQ="\x1b["
+black=$ESQ'30;40m'
+red=$ESQ'1;31;40m'
+green=$ESQ'32;40m'
+yellow=$ESQ'33;40m'
+blue=$ESQ'1;34;40m'
+magenta=$ESQ'35;40m'
+cyan=$ESQ'36;40m'
+white=$ESQ'1;37;40m'
 reset=$(tput sgr0)
 
 # Constants
