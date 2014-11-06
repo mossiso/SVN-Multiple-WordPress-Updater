@@ -27,7 +27,6 @@ white=$ESQ'1;37;40m'
 reset=$(tput sgr0)
 
 # Constants
-RANDOM=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
 CURDATE=$(date +%F)
 SVNREPORT="svnreport-$CURDATE"
 # http://codex.WordPress.org/Installing/Updating_WordPress_with_Subversion
