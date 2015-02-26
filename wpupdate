@@ -5,8 +5,6 @@
 #                                                                              #
 #                                                                              #
 #   @Author: Ammon Shepherd                                                    #
-#   @Date:   04.30.14                                                          #
-    VERSION="2.0"  
 #------------------------------------------------------------------------------#
 
 # End the script if any statement returns a non-true return value
@@ -32,7 +30,9 @@ SVNREPORT="svnreport-$CURDATE"
 # http://codex.WordPress.org/Installing/Updating_WordPress_with_Subversion
 OLDBASE="http://svn.automattic.com/wordpress"
 SVNBASE="http://core.svn.wordpress.org"
-LATESTWP=$(curl -s http://wordpress.org/download/ | grep "latest stable release of WordPress" | cut -d"(" -f2 | cut -d")" -f1 | cut -d" " -f2)
+#LATESTWP=$(curl -s http://wordpress.org/download/ | grep "latest stable release of WordPress" | cut -d"(" -f2 | cut -d")" -f1 | cut -d" " -f2)
+LATESTWP=$(wget -qO - http://wordpress.org/download/ | grep "latest stable release of WordPress" | cut -d"(" -f2 | cut -d")" -f1 | cut -d" " -f2)
+
 
 
 USAGE='
@@ -50,7 +50,7 @@ Prints out this help message.
 '
 
 
-HELPTEXT='wpupdate '$VERSION' by Ammon Shepherd
+HELPTEXT='wpupdate by Ammon Shepherd
 
 '$USAGE'
 
